@@ -1,0 +1,239 @@
+clear all; close all; clc;
+
+%variables
+a = 0.01;     % [m]
+b = 0.15;    % [m]
+ldp = b - a;  % lower dead point [m]
+e = 0.0005;   % [m]
+F = 1400;     % [N]
+productivity = 200; %356;  % pieces/min //max_productivity=356
+M = 7.188; % [kg]
+J_crank = 0.001340362; %[kg*m^2]
+J_rod = 0.004982184;   %[kg*m^2]
+omega_master = productivity*(2*pi/60); %[rad/s]
+
+%-------FLAT_PRINTING--------%
+ddt = 0;
+i=1;
+k=1;
+
+%direct_kinematics
+
+for tetha=deg2rad(0):deg2rad(0.1):deg2rad(360)
+
+   %position
+    x=a*cos(tetha)+k*sqrt(b^2-a^2*sin(tetha)^2);
+    sb=-a/b*sin(tetha);
+    cb=(x-a*cos(tetha))/b;
+
+    %speed
+    db=-omega_master*a*cos(tetha)/(b*cb);
+    dx=-omega_master*a*(sin(tetha)*cb-cos(tetha)*sb)/cb;
+
+    %acceleration
+    ddb=(db^2*b*sb-ddt*a*cos(tetha)+omega_master^2*a*sin(tetha))/(b*cb);
+    ddx=(-ddt*a*(sin(tetha)*cb-cos(tetha)*sb)-...
+    omega_master^2*a*(cos(tetha)*cb+sin(tetha)*sb)-db^2*b)/cb;  
+
+
+%dynamics
+if (x>=0.140 && x<=0.1405) && dx<=0
+
+    Cr_flat = (M*dx*ddx + J_rod*db*ddb + J_crank*omega_master*ddt - F*dx) /...
+        omega_master;
+  
+    else
+        Cr_flat = (M*dx*ddx + J_rod*db*ddb + J_crank*omega_master*ddt) /...
+            omega_master;
+end
+
+    omega_master_s(i)=omega_master;
+    x_s(i)=x;
+    dx_s(i)=dx;
+    ddx_s(i)=ddx;
+    Cr_flat_s(i)=Cr_flat;
+    t(i)=tetha/omega_master;
+    tetha_s(i)=rad2deg(tetha);
+    i=i+1;
+    
+end
+
+
+%--------RELIEF_PRINTING----------
+
+y_low=0;      % [m]
+y_high=0.0055; % [m]
+alpha_1=deg2rad(45); % [rad]
+alpha_2=deg2rad(155); % [rad]
+alpha_3=deg2rad(225); % [rad]
+alpha_4=deg2rad(315); % [rad]
+alpha_5=deg2rad(360); % [rad]
+
+i=1;
+
+for alpha = deg2rad(0):deg2rad(0.1):deg2rad(360)
+
+        res = MCM_motionProfile_RELEASE(alpha,a,b,ldp,e,y_low,y_high, ...
+            alpha_1,alpha_2,alpha_3,alpha_4,alpha_5,omega_master);
+
+        master_angle(i)=alpha;
+        x_slider(i) = res.pos; 
+        v_slider(i) = res.vel;
+        a_slider(i) = res.acc;
+        tetha(i) = res.tetha;
+        dtetha(i) = res.dtetha;
+        ddtetha(i) = res.ddtetha;
+        dbeta(i) = res.dbeta;
+        ddbeta(i) = res.ddbeta;
+        time(i) = alpha/omega_master; %141.6 149.48
+
+    %dynamics of the relief printing case
+    dtetha_tolerance =1e-4;
+    if abs(dtetha(i)) > dtetha_tolerance
+        if x_slider(i) < 0.141 && dtetha(i) > dtetha_tolerance
+            
+            Cr_relief = (M*v_slider(i)*a_slider(i) + ...
+                J_rod*dbeta(i)*ddbeta(i) + ...
+                J_crank*dtetha(i)*ddtetha(i) - ...
+                F*v_slider(i)) / dtetha(i);
+           
+        else
+            Cr_relief = (M*v_slider(i)*a_slider(i) + ...
+                J_rod*dbeta(i)*ddbeta(i) + ...
+                J_crank*dtetha(i)*ddtetha(i)) / dtetha(i);
+        end
+
+    elseif abs(dtetha(i)) < dtetha_tolerance && x_slider(i) <= 0.141 
+        
+        %Cr_relief=F*sin(deg2rad(180-161.2))*cos(12.2)*cos(6.4)*a;
+        Cr_relief=-F*(-a*sin(tetha(i))-((a^2*sin(tetha(i))*cos(tetha(i)))/(sqrt(b^2-a^2*(sin(tetha(i)))^2))));
+
+    elseif abs(dtetha(i)) < dtetha_tolerance && x_slider(i) >= 0.141 
+        Cr_relief=0;
+        
+    end
+    
+    Cr_relief_s(i) = Cr_relief;
+    app(i)=ddtetha(i)* Cr_relief_s(i); 
+    
+    i = i + 1;
+end
+
+
+%----PLOTS-----
+
+%flat_printing
+
+figure;
+subplot(3,1,1);
+plot(t,x_s , 'LineWidth', 2);
+ylabel('Position [m]');
+title('slider - flat');
+grid on;
+subplot(3,1,2);
+plot(t, dx_s, 'LineWidth', 2);
+ylabel('Velocity [m/s]');
+grid on;
+subplot(3,1,3);
+plot(t, ddx_s, 'LineWidth', 2);
+ylabel('Acceleration [m/s^2]');
+xlabel('time [s]');
+grid on;
+
+figure
+plot(t, Cr_flat_s);
+xlabel('time [s]');
+ylabel('Cr_flat [Nm]');
+title('required torque - flat');
+grid on;
+
+%relief_printing
+figure;
+subplot(3,1,1);
+plot(time,x_slider , 'LineWidth', 2);
+ylabel('Position [m]');
+title('slider - relief');
+grid on;
+subplot(3,1,2);
+plot(time, v_slider, 'LineWidth', 2);
+ylabel('Velocity [m/s]');
+grid on;
+subplot(3,1,3);
+plot(time, a_slider, 'LineWidth', 2);
+ylabel('Acceleration [m/s^2]');
+xlabel('time [s]');
+grid on;
+
+figure;
+subplot(3,1,1);
+plot(rad2deg(master_angle),x_slider , 'LineWidth', 2);
+ylabel('Position [m]');
+title('slider - relief ');
+grid on;
+subplot(3,1,2);
+plot(rad2deg(master_angle), v_slider, 'LineWidth', 2);
+ylabel('Velocity [m/s]');
+grid on;
+subplot(3,1,3);
+plot(rad2deg(master_angle), a_slider, 'LineWidth', 2);
+ylabel('Acceleration [m/s^2]');
+xlabel('alpha');
+grid on;
+
+figure;
+plot(time, Cr_relief_s);
+xlabel('time [s]');
+ylabel('Cr_relief [Nm]');
+title('required torque - relief');
+grid on;
+
+%------sizing-------
+sizing_ReliefPrintingGroup_RELEASE;
+
+
+
+%%ANIMATION-relief
+
+% angle_start = deg2rad(111.68);
+% angle_end   = deg2rad(161.17);
+% n_steps = 50; 
+% n_dwell = 15;
+% theta_forward = linspace(angle_start, angle_end, n_steps);
+% theta_dwell   = angle_end * ones(1, n_dwell);
+% theta_backward = linspace(angle_end, angle_start, n_steps);
+% theta_cycle = [theta_forward, theta_dwell, theta_backward];
+% 
+% figure; clf;
+% axis equal;
+% grid on;
+% axis manual;
+% axis([-(a*3+b) (a*3+b) -a*3 a*3]);
+% title('Crank-Slider Mechanism Animation');
+% 
+% ll = line('XData', [0 0 0], 'YData', [0 0 0], 'LineStyle', '-', ...
+%     'LineWidth', 2, 'Color', 'b', 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+% 
+% num_cycles = 10;  
+% for cycle = 1:num_cycles
+%     for i = 1:length(theta_cycle)
+%         th = theta_cycle(i);
+%         A = [a*cos(th), a*sin(th)];
+%         slider_x = a*cos(th) + sqrt(b^2 - (a*sin(th))^2);
+%         B = [slider_x, 0];  
+%         set(ll, 'XData', [0, A(1), B(1)], 'YData', [0, A(2), B(2)]);
+% 
+%         pause(0.01);
+%     end
+% end
+
+
+tt=time;
+ww=tetha;
+signal1 = Simulink.SimulationData.Signal;
+signal1.Name = 'pos';
+signal1.Values = timeseries(ww, tt);
+ds = Simulink.SimulationData.Dataset;
+ds = addElement(ds, signal1, 'position');
+save('pos.mat', 'ds');
+
+

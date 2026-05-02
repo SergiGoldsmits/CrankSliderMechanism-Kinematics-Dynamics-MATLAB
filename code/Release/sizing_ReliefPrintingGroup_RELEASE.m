@@ -1,0 +1,91 @@
+Crsq=rms(Cr_relief_s);
+dwrq=rms(ddtetha);
+dwCm=mean(app);
+beta=2*(Crsq*dwrq + dwCm);
+
+catalog_ReliefPrintigGroup;
+
+figure;
+for i=1:length(mot)
+    plot(i,mot(i).alfa, 'o','LineWidth',2,'MarkerSize',5);
+    hold on;
+end
+
+line('Xdata',[0 length(mot)+1],...
+    'Ydata', [beta beta],...
+    'Linestyle','-','LineWidth',2,'color','r');
+grid on;
+
+
+wmax=max(dtetha);
+for i=1:length(mot)
+    if (mot(i).alfa > beta)
+        tau(i).p=wmax/mot(i).wm
+        tau(i).t_max=(sqrt(mot(i).J)*(sqrt(mot(i).alfa-beta+4*dwrq*Crsq)...
+            + sqrt(mot(i).alfa - beta)))/(2*Crsq);
+        tau(i).t_min=(sqrt(mot(i).J)*(sqrt(mot(i).alfa-beta+4*dwrq*Crsq)...
+            - sqrt(mot(i).alfa - beta)))/(2*Crsq);
+        tau(i).t_opt=sqrt(mot(i).J*dwrq/Crsq);
+    else
+        tau(i).p=0;
+        tau(i).t_max=0;
+        tau(i).t_min=0;
+        tau(i).t_opt=0;
+    end
+end
+
+ii=[1:length(mot)];
+tau_min=[tau(:).t_min];
+tau_opt=[tau(:).t_opt];
+tau_max=[tau(:).t_max];
+tau_p=[tau(:).p];
+hold off
+
+figure;
+semilogy(ii , tau_min,'v',...
+    ii , tau_opt,'o',...
+    ii , tau_max,'^',...
+    ii , tau_p,'h','LineWidth',2,'MarkerSize',5);
+hold on;
+for i=1:length(rid)
+    semilogy([1:0.01:length(mot)], rid(i).tau, '.');
+    hold on;
+end
+
+grid on
+
+%---------check-----------------
+
+mm=3;
+tt=2;
+ 
+Cm=Cr_relief_s*rid(tt).tau + mot(mm).J*ddtetha/rid(tt).tau;
+
+figure;
+plot(time,Cm,'LineWidth',1); grid on;
+title('motor torque - relief');
+xlabel('time [s]');
+ylabel('Cm [Nm]');
+
+
+figure;
+plot(dtetha*60/(2*pi),Cm, 'k','LineWidth',1); grid on; %rpm
+hold on;
+line('XData',[0 3000 3000, 3000, 0],...
+    'YData', [1.3 1.2 0 -1.2 -1.3],...
+    'linestyle','-','linewidth',2,'color','g');
+
+%%maximum torque
+line('XData',[0 3000 3000, 3000, 0],...
+    'YData', [3.4 3.4 0 -3.4 -3.4],...
+    'linestyle','-','linewidth',2,'color','r');
+
+%%RMS torque
+line('XData',[0 rms(dtetha)*60/(2*pi)],...
+    'YData', [rms(Cm) rms(Cm)],...
+    'linestyle','-','linewidth',2,'color','k');
+
+
+%------flexibility check-------
+
+
