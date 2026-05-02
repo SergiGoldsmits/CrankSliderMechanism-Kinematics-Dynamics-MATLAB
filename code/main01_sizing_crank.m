@@ -1,0 +1,124 @@
+clear all
+close all
+clc
+
+i=1;
+omega=200*2*pi/60;    %velocity of master angle, 100 rpm --> rad/s //productivity
+R=0.01;               %Radius
+Cr= 1400*R;            %resistent torque= Force * Radius
+J=(932.745+(2*3.978)+4.41+5.64+8.765+3130.486+ ...
+  608.69+51.61+317.25+(2*12.46)+2.86+87.51+3.023+0.688)*10^-6; %Rotating Inertia [kg*m^2]            
+f = 3.33;
+T = 1 / f;               % period [s]
+N = 1000;                % number of points
+t = linspace(0, T, N);% time normalized until N-1 because first position is 0
+k=1 %direction of rotation             
+
+motioncurve_script;
+                           
+%compute the torque
+for i = 1:N
+    if (res.vel(i)<0)
+        Crs(i)=Cr+J*res.acc(i);  %Crs=Crstar:sum of inertia and resistance torque
+
+    else
+        Crs(i)=J*res.acc(i);
+
+    end
+
+    app(i)=res.acc(i)*Crs(i);
+
+    i=i+1;
+
+end
+
+Crsq=rms(Crs);
+dwrq=rms(res.acc);
+dwCm=mean(app);
+beta=2*(dwrq*Crsq + dwCm);
+
+catalog;
+
+figure;
+for i=1:length(mot)
+    plot(i,mot(i).alfa, 'o','LineWidth',2,'MarkerSize',5);
+    hold on;
+end
+
+line('Xdata',[0 length(mot)+1],...
+    'Ydata', [beta beta],...
+    'Linestyle','-','LineWidth',2,'color','r');
+grid on;
+
+
+wmax=max(res.vel);
+for i=1:length(mot)
+    if (mot(i).alfa > beta)
+        tau(i).p=wmax/mot(i).wm
+        tau(i).t_max=(sqrt(mot(i).J)*(sqrt(mot(i).alfa-beta+4*dwrq*Crsq)...
+            + sqrt(mot(i).alfa - beta)))/(2*Crsq);
+        tau(i).t_min=(sqrt(mot(i).J)*(sqrt(mot(i).alfa-beta+4*dwrq*Crsq)...
+            - sqrt(mot(i).alfa - beta)))/(2*Crsq);
+        tau(i).t_opt=sqrt(mot(i).J*dwrq/Crsq);
+    else
+        tau(i).p=0;
+        tau(i).t_max=0;
+        tau(i).t_min=0;
+        tau(i).t_opt=0;
+    end
+end
+
+ii=[1:length(mot)];
+tau_min=[tau(:).t_min];
+tau_opt=[tau(:).t_opt];
+tau_max=[tau(:).t_max];
+tau_p=[tau(:).p];
+hold off
+
+figure
+semilogy(ii , tau_min,'v',...
+    ii , tau_opt,'o',...
+    ii , tau_max,'^',...
+    ii , tau_p,'h','LineWidth',2,'MarkerSize',5);
+hold on;
+for i=1:length(rid)
+    semilogy([1:0.01:length(mot)], rid(i).tau, '.');
+    hold on;
+end
+
+grid on
+
+figure;
+subplot(3,1,1); plot(t,res.x,'LineWidth',2); grid on; title('Position');
+subplot(3,1,2); plot(t,res.vel,'LineWidth',2); grid on; title('Velocity');
+subplot(3,1,3); plot(t,res.acc,'LineWidth',2); grid on; title('Acceleration');
+
+
+figure;
+plot(t,Crs,'LineWidth',2); grid on; title('Torque');
+
+%---------check-----------------
+
+mm=1;
+tt=3;
+
+Cm=Crs*rid(tt).tau + mot(mm).J*res.acc/rid(tt).tau;
+
+figure;
+plot(res.vel*60/(2*pi),Cm, 'k','LineWidth',1); grid on;
+hold on;
+line('XData',[0 2800 2800, 2800, 0],...
+    'YData', [82 75 0 -75 -82],...
+    'linestyle','-','linewidth',2,'color','g');
+
+%%maximum torque
+line('XData',[0 2800 2800, 2800, 0],...
+    'YData', [328 328 0 -328 -328],...
+    'linestyle','-','linewidth',2,'color','r');
+
+%%RMS torque
+line('XData',[0 rms(res.vel)*60/(2*pi)],...
+    'YData', [rms(Cm) rms(Cm)],...
+    'linestyle','-','linewidth',2,'color','k');
+
+
